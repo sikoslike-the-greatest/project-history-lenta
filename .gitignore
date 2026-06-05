@@ -17,11 +17,7 @@ siria.txt
 Лента времени - контент.md
 Требования и критерии.md
 
-# Фотографии событий (добавляй сам локально)
-assets/img/*.jpg
-assets/img/*.jpeg
-assets/img/*.png
-assets/img/*.webp
+
 
 # Редакторы и IDE
 .vscode/
