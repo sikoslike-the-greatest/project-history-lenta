@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Лента времени · Современная Россия 1991–2022</title>
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="brand">История России · <span>1991–2022</span></div>
+  <div class="links">
+    <a href="index.html" class="active">Главная</a>
+    <a href="timeline.html">Лента времени</a>
+    <a href="quiz.html">Квиз</a>
+    <a href="game.html">Игра</a>
+  </div>
+</nav>
+
+<div class="page-layout">
+
+  <!-- Левая панель: список событий -->
+  <aside class="events-sidebar">
+    <div class="sidebar-label">События ленты</div>
+    <ol class="sidebar-events" id="sidebarList"></ol>
+  </aside>
+
+  <!-- Основной контент -->
+  <div class="page-main">
+
+    <header class="hero">
+      <span class="eyebrow">Проект по курсу «История России»</span>
+      <h1>Современная Россия<br>на ленте времени</h1>
+      <p class="lead">
+        24 ключевых события, которые сформировали Российскую Федерацию: от распада СССР
+        до нового геополитического этапа. У каждого события — обложка с фото и подробный
+        разбор: причины, ход, последствия для России и мира, историческое значение.
+      </p>
+      <div class="period">1991 — 2022</div>
+    </header>
+
+    <main class="cards">
+      <a class="nav-card" href="timeline.html">
+        <span class="big-icon">📜</span>
+        <h3>Лента времени</h3>
+        <p>24 события: обложка с фоновым фото, а по прокрутке вниз — детальный разбор (причины, ход, последствия для России и мира). Листай стрелками или включи автопрокрутку.</p>
+        <span class="go btn small">Открыть ленту →</span>
+      </a>
+
+      <a class="nav-card" href="quiz.html">
+        <span class="big-icon">🧠</span>
+        <h3>Квиз</h3>
+        <p>21 вопрос на знание событий 1991–2022. Мгновенный разбор ответов и итоговая оценка знаний в конце.</p>
+        <span class="go btn small">Пройти квиз →</span>
+      </a>
+
+      <a class="nav-card" href="game.html">
+        <span class="big-icon">🎮</span>
+        <h3>Игра «Сквозь эпохи»</h3>
+        <p>Раннер, где фон и препятствия меняются по эпохам — от очередей 90-х до современного города. Прыгай и набирай очки.</p>
+        <span class="go btn small">Играть →</span>
+      </a>
+    </main>
+
+    <section class="sources-block">
+      <h3>Источники (разных типов)</h3>
+      <ol>
+        <li>История России. XX – начало XXI века: учебник для вузов / под ред. Л. В. Милова. — М.: Эксмо, 2020.</li>
+        <li>Зубов А. Б. История России. ХХ век. — М.: АСТ, 2017.</li>
+        <li>Гайдар Е. Т. Гибель империи. — М.: РОССПЭН, 2006.</li>
+        <li>Большая российская энциклопедия — bigenc.ru (статьи по событиям).</li>
+        <li>Архив РИА Новости — ria.ru/spravka; Архив ТАСС — tass.ru.</li>
+        <li>Данные Росстата (gks.ru) и Банка России (cbr.ru).</li>
+        <li>Документальные фильмы: «Распад» (ВГТРК), «Президент» (2015), «Осень 93».</li>
+        <li>Конституция Российской Федерации (принята 12.12.1993); сайт Президента России — kremlin.ru.</li>
+      </ol>
+    </section>
+
+    <footer style="text-align:center;padding:0 20px 50px;color:var(--text-dim);font-size:13px;">
+      Манин Андрей<br>
+      БИБ254
+    </footer>
+
+  </div><!-- /page-main -->
+</div><!-- /page-layout -->
+
+<script src="assets/events.js"></script>
+<script>
+  const list = document.getElementById('sidebarList');
+  EVENTS.forEach((e, i) => {
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <a href="timeline.html?slide=${i + 1}" class="sidebar-item era-${e.era}">
+        <span class="sb-num">${String(i + 1).padStart(2, '0')}</span>
+        <span class="sb-body">
+          <span class="sb-year">${e.date}</span>
+          <span class="sb-title">${e.title}</span>
+        </span>
+      </a>`;
+    list.appendChild(li);
+  });
+</script>
+
+</body>
+</html>

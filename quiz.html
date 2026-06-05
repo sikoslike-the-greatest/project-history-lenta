@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Квиз · Современная Россия 1991–2022</title>
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="brand">История России · <span>1991–2022</span></div>
+  <div class="links">
+    <a href="index.html">Главная</a>
+    <a href="timeline.html">Лента времени</a>
+    <a href="quiz.html" class="active">Квиз</a>
+    <a href="game.html">Игра</a>
+  </div>
+</nav>
+
+<div class="quiz-wrap">
+  <div class="quiz-head">
+    <h1>Квиз по теме</h1>
+    <p><span id="qcount">21</span> вопрос о ключевых событиях современной России. Проверь себя!</p>
+  </div>
+
+  <div class="qprogress"><span id="bar"></span></div>
+
+  <div id="stage"></div>
+</div>
+
+<script src="assets/quiz-data.js"></script>
+<script>
+(function () {
+  const stage = document.getElementById('stage');
+  const bar = document.getElementById('bar');
+  const LETTERS = ['А', 'Б', 'В', 'Г', 'Д'];
+
+  // перемешиваем вопросы (алгоритм Фишера–Йейтса)
+  for (let i = QUIZ.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [QUIZ[i], QUIZ[j]] = [QUIZ[j], QUIZ[i]];
+  }
+
+  let idx = 0;
+  let score = 0;
+  let answered = false;
+  const wrongList = [];
+
+  const qc = document.getElementById('qcount');
+  if (qc) qc.textContent = QUIZ.length;
+
+  function updateBar() {
+    bar.style.width = (idx / QUIZ.length) * 100 + '%';
+  }
+
+  function renderQuestion() {
+    answered = false;
+    updateBar();
+    const q = QUIZ[idx];
+    const card = document.createElement('div');
+    card.className = 'qcard';
+    card.innerHTML = `
+      <div class="qnum">Вопрос ${idx + 1} из ${QUIZ.length}</div>
+      <div class="qtext">${q.question}</div>
+      <div class="options">
+        ${q.options.map((opt, i) =>
+          `<button class="option" data-i="${i}">
+             <span class="letter">${LETTERS[i]}</span><span>${opt}</span>
+           </button>`).join('')}
+      </div>
+      <div class="feedback" id="fb"></div>
+      <div class="next-row" id="nextRow" style="display:none;">
+        <button class="btn" id="nextBtn">${idx === QUIZ.length - 1 ? 'Показать результат' : 'Следующий вопрос →'}</button>
+      </div>
+    `;
+    stage.innerHTML = '';
+    stage.appendChild(card);
+
+    const opts = card.querySelectorAll('.option');
+    opts.forEach(btn => btn.addEventListener('click', () => choose(btn, opts, q)));
+    card.querySelector('#nextBtn').addEventListener('click', goNext);
+  }
+
+  function choose(btn, opts, q) {
+    if (answered) return;
+    answered = true;
+    const chosen = Number(btn.dataset.i);
+    opts.forEach((o, i) => {
+      o.disabled = true;
+      if (i === q.correct) o.classList.add('correct');
+      if (i === chosen && chosen !== q.correct) o.classList.add('wrong');
+    });
+
+    const fb = document.getElementById('fb');
+    if (chosen === q.correct) {
+      score++;
+      fb.innerHTML = `<b>Верно!</b> ${q.explanation}`;
+    } else {
+      wrongList.push({ q: q.question, correct: q.options[q.correct] });
+      fb.innerHTML = `<b>Неверно.</b> Правильный ответ: «${q.options[q.correct]}». ${q.explanation}`;
+    }
+    fb.classList.add('show');
+    document.getElementById('nextRow').style.display = 'flex';
+  }
+
+  function goNext() {
+    const card = stage.querySelector('.qcard');
+    card.classList.add('leaving');
+    setTimeout(() => {
+      idx++;
+      if (idx < QUIZ.length) renderQuestion();
+      else renderResult();
+    }, 280);
+  }
+
+  function renderResult() {
+    bar.style.width = '100%';
+    const pct = Math.round((score / QUIZ.length) * 100);
+    let verdict, emoji;
+    if (pct >= 85) { verdict = 'Превосходно! Ты настоящий знаток новейшей истории России.'; emoji = '🏆'; }
+    else if (pct >= 65) { verdict = 'Отличный результат! Материал усвоен очень хорошо.'; emoji = '🎉'; }
+    else if (pct >= 45) { verdict = 'Неплохо! Но стоит ещё раз пройтись по ленте времени.'; emoji = '👍'; }
+    else { verdict = 'Есть над чем поработать — открой ленту времени и разбери события заново.'; emoji = '📚'; }
+
+    const circ = 2 * Math.PI * 80;
+    const offset = circ * (1 - score / QUIZ.length);
+
+    const wrongHtml = wrongList.length
+      ? `<div style="text-align:left;max-width:520px;margin:24px auto 0;">
+           <h3 style="color:var(--accent);margin-bottom:10px;font-size:16px;">Что повторить:</h3>
+           <ul style="margin-left:20px;color:var(--text-dim);font-size:14px;line-height:1.7;">
+             ${wrongList.map(w => `<li>${w.q} <b style="color:#e7ecf5;">→ ${w.correct}</b></li>`).join('')}
+           </ul>
+         </div>`
+      : `<p style="color:var(--accent-3);margin-top:10px;">Ни одной ошибки — идеально!</p>`;
+
+    stage.innerHTML = `
+      <div class="result">
+        <div class="score-ring">
+          <svg width="180" height="180">
+            <circle cx="90" cy="90" r="80" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="14"/>
+            <circle cx="90" cy="90" r="80" fill="none" stroke="url(#g)" stroke-width="14"
+              stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${circ}" id="ring"/>
+            <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#ef4444"/>
+            </linearGradient></defs>
+          </svg>
+          <div class="num"><b>${score}/${QUIZ.length}</b><span>${pct}%</span></div>
+        </div>
+        <h2>${emoji} Результат</h2>
+        <p class="verdict">${verdict}</p>
+        ${wrongHtml}
+        <div class="actions">
+          <button class="btn" id="again">Пройти заново</button>
+          <a class="btn ghost" href="timeline.html">К ленте времени</a>
+        </div>
+      </div>
+    `;
+    requestAnimationFrame(() => {
+      const ring = document.getElementById('ring');
+      ring.style.transition = 'stroke-dashoffset 1.1s cubic-bezier(0.4,0,0.2,1)';
+      requestAnimationFrame(() => ring.style.strokeDashoffset = offset);
+    });
+    document.getElementById('again').addEventListener('click', restart);
+
+    if (pct >= 80) launchConfetti();
+  }
+
+  function restart() {
+    idx = 0; score = 0; wrongList.length = 0;
+    renderQuestion();
+  }
+
+  function launchConfetti() {
+    const colors = ['#f59e0b', '#ef4444', '#10b981', '#3b82f6', '#ffffff'];
+    for (let i = 0; i < 90; i++) {
+      const p = document.createElement('div');
+      p.className = 'confetti-piece';
+      p.style.left = Math.random() * 100 + 'vw';
+      p.style.background = colors[Math.floor(Math.random() * colors.length)];
+      p.style.animationDuration = (2 + Math.random() * 2) + 's';
+      p.style.animationDelay = (Math.random() * 0.6) + 's';
+      p.style.transform = `rotate(${Math.random() * 360}deg)`;
+      document.body.appendChild(p);
+      setTimeout(() => p.remove(), 4500);
+    }
+  }
+
+  renderQuestion();
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Игра «Сквозь эпохи» · 1991–2022</title>
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="brand">История России · <span>1991–2022</span></div>
+  <div class="links">
+    <a href="index.html">Главная</a>
+    <a href="timeline.html">Лента времени</a>
+    <a href="quiz.html">Квиз</a>
+    <a href="game.html" class="active">Игра</a>
+  </div>
+</nav>
+
+<div class="game-wrap">
+  <h1>Сквозь эпохи</h1>
+  <p class="sub">Беги через историю России 1991–2022. Прыгай через препятствия — фон и эпоха меняются по мере набора очков.</p>
+
+  <div class="canvas-shell">
+    <canvas id="game" width="800" height="400"></canvas>
+    <div class="hud">
+      <span id="hudEra">1991 · Распад СССР</span>
+      <span>Очки: <span id="hudScore">0</span> &nbsp; Рекорд: <span id="hudBest">0</span></span>
+    </div>
+    <div class="era-flash" id="eraFlash"></div>
+    <div class="game-overlay" id="overlay">
+      <h2 id="ovTitle">Готов к забегу сквозь историю?</h2>
+      <p id="ovText">Прыжок — <b>пробел</b>, клик или тап. Перепрыгивай препятствия каждой эпохи и доберись до 2022 года.</p>
+      <button class="btn" id="startBtn">▶ Начать игру</button>
+      <div class="game-controls-hint">Пробел / ↑ / клик — прыжок</div>
+    </div>
+  </div>
+
+  <p style="margin-top:18px;color:var(--text-dim);font-size:13px;">
+    Каждая эпоха — свой фон, цвет и препятствия: очереди 90-х, бочки нефти 2000-х, олимпийские кольца Сочи,
+    футбольные мячи 2018-го и город 2022-го.
+  </p>
+</div>
+
+<script>
+(function () {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const GROUND_Y = H - 60;
+
+  const hudScore = document.getElementById('hudScore');
+  const hudBest = document.getElementById('hudBest');
+  const hudEra = document.getElementById('hudEra');
+  const eraFlash = document.getElementById('eraFlash');
+  const overlay = document.getElementById('overlay');
+  const ovTitle = document.getElementById('ovTitle');
+  const ovText = document.getElementById('ovText');
+  const startBtn = document.getElementById('startBtn');
+
+  // Эпохи: порог очков, название, палитра неба/земли, тип препятствия
+  const ERAS = [
+    { score: 0,   name: "1991 · Распад СССР",      sky1: "#6b7280", sky2: "#9ca3af", ground: "#4b5563", obstacle: "queue",   prop: "kremlin" },
+    { score: 20,  name: "1990-е · Лихие годы",      sky1: "#57534e", sky2: "#78716c", ground: "#44403c", obstacle: "kiosk",   prop: "panel" },
+    { score: 40,  name: "1998 · Дефолт",            sky1: "#7f1d1d", sky2: "#b91c1c", ground: "#450a0a", obstacle: "chart",   prop: "panel" },
+    { score: 60,  name: "2000-е · Нефтяной подъём", sky1: "#92400e", sky2: "#d97706", ground: "#451a03", obstacle: "barrel",  prop: "derrick" },
+    { score: 85,  name: "2008 · Мировой кризис",    sky1: "#1f2937", sky2: "#374151", ground: "#111827", obstacle: "chart",   prop: "city" },
+    { score: 110, name: "2014 · Олимпиада в Сочи",  sky1: "#0e7490", sky2: "#67e8f9", ground: "#e2e8f0", obstacle: "ring",    prop: "mountain" },
+    { score: 135, name: "2014 · Крым",              sky1: "#0c4a6e", sky2: "#0ea5e9", ground: "#155e75", obstacle: "wave",    prop: "sea" },
+    { score: 160, name: "2018 · ЧМ по футболу",     sky1: "#14532d", sky2: "#22c55e", ground: "#166534", obstacle: "ball",    prop: "stadium" },
+    { score: 185, name: "2022 · Новый этап",        sky1: "#450a0a", sky2: "#1c1917", ground: "#1c1917", obstacle: "drone",   prop: "city" }
+  ];
+
+  let player, obstacles, props, speed, score, frame, running, eraIndex, best;
+  best = Number(localStorage.getItem('epochs_best') || 0);
+  hudBest.textContent = best;
+
+  function reset() {
+    player = { x: 90, y: GROUND_Y, w: 26, h: 46, vy: 0, onGround: true };
+    obstacles = [];
+    props = [];
+    speed = 5.2;
+    score = 0;
+    frame = 0;
+    eraIndex = 0;
+    running = true;
+    spawnProp();
+  }
+
+  function currentEra() {
+    let e = ERAS[0];
+    for (let i = 0; i < ERAS.length; i++) if (score >= ERAS[i].score) e = ERAS[i], eraIndexCandidate = i;
+    return e;
+  }
+  let eraIndexCandidate = 0;
+
+  function lerpColor(a, b, t) {
+    const pa = hexToRgb(a), pb = hexToRgb(b);
+    const r = Math.round(pa.r + (pb.r - pa.r) * t);
+    const g = Math.round(pa.g + (pb.g - pa.g) * t);
+    const bl = Math.round(pa.b + (pb.b - pa.b) * t);
+    return `rgb(${r},${g},${bl})`;
+  }
+  function hexToRgb(h) {
+    const n = parseInt(h.slice(1), 16);
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  }
+
+  // плавный переход палитры между эпохами
+  let curSky1, curSky2, curGround;
+  function initColors() {
+    curSky1 = ERAS[0].sky1; curSky2 = ERAS[0].sky2; curGround = ERAS[0].ground;
+  }
+
+  function flashEra(name) {
+    eraFlash.textContent = name;
+    eraFlash.classList.remove('show');
+    void eraFlash.offsetWidth;
+    eraFlash.classList.add('show');
+  }
+
+  // --- отрисовка фоновых "пропсов" (декорации эпохи) ---
+  function spawnProp() {
+    const era = currentEra();
+    props.push({ x: W + 40, type: era.prop, scale: 0.8 + Math.random() * 0.5 });
+  }
+
+  function drawProp(p) {
+    ctx.save();
+    ctx.translate(p.x, GROUND_Y);
+    ctx.globalAlpha = 0.5;
+    const s = p.scale;
+    switch (p.type) {
+      case "kremlin":
+        ctx.fillStyle = "#3f3f46";
+        ctx.fillRect(-30*s, -70*s, 60*s, 70*s);
+        ctx.beginPath(); ctx.moveTo(-30*s, -70*s); ctx.lineTo(0, -100*s); ctx.lineTo(30*s, -70*s); ctx.fill();
+        ctx.fillStyle = "#dc2626"; ctx.beginPath(); ctx.arc(0, -104*s, 5*s, 0, 7); ctx.fill();
+        break;
+      case "panel":
+        ctx.fillStyle = "#52525b";
+        ctx.fillRect(-26*s, -90*s, 52*s, 90*s);
+        ctx.fillStyle = "rgba(250,220,150,0.5)";
+        for (let r = 0; r < 6; r++) for (let c = 0; c < 3; c++)
+          ctx.fillRect(-20*s + c*16*s, -82*s + r*14*s, 8*s, 8*s);
+        break;
+      case "derrick":
+        ctx.strokeStyle = "#1f2937"; ctx.lineWidth = 3*s;
+        ctx.beginPath();
+        ctx.moveTo(-20*s, 0); ctx.lineTo(0, -90*s); ctx.lineTo(20*s, 0);
+        ctx.moveTo(-12*s, -40*s); ctx.lineTo(12*s, -40*s); ctx.stroke();
+        break;
+      case "city":
+        ctx.fillStyle = "#111827";
+        for (let i = 0; i < 4; i++) ctx.fillRect(-40*s + i*22*s, -(50+i*15)*s, 18*s, (50+i*15)*s);
+        break;
+      case "mountain":
+        ctx.fillStyle = "#e2e8f0";
+        ctx.beginPath(); ctx.moveTo(-60*s, 0); ctx.lineTo(0, -110*s); ctx.lineTo(60*s, 0); ctx.fill();
+        ctx.fillStyle = "#94a3b8";
+        ctx.beginPath(); ctx.moveTo(-14*s, -82*s); ctx.lineTo(0, -110*s); ctx.lineTo(14*s, -82*s); ctx.fill();
+        break;
+      case "sea":
+        ctx.strokeStyle = "rgba(255,255,255,0.6)"; ctx.lineWidth = 2*s;
+        for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(-20*s + i*20*s, -10*s, 8*s, Math.PI, 0); ctx.stroke(); }
+        break;
+      case "stadium":
+        ctx.strokeStyle = "#a3e635"; ctx.lineWidth = 4*s;
+        ctx.beginPath(); ctx.ellipse(0, -40*s, 50*s, 40*s, 0, 0, 7); ctx.stroke();
+        break;
+    }
+    ctx.restore();
+  }
+
+  // --- препятствия эпохи ---
+  function spawnObstacle() {
+    const era = currentEra();
+    const types = { queue:[24,34], kiosk:[30,40], chart:[26,42], barrel:[26,36], ring:[30,30], wave:[34,24], ball:[26,26], drone:[34,22] };
+    const dim = types[era.obstacle] || [26,34];
+    obstacles.push({ x: W + 20, w: dim[0], h: dim[1], type: era.obstacle, hit: false });
+  }
+
+  function drawObstacle(o) {
+    ctx.save();
+    ctx.translate(o.x, GROUND_Y - o.h);
+    switch (o.type) {
+      case "queue": // силуэты людей в очереди
+        ctx.fillStyle = "#1f2937";
+        for (let i = 0; i < 3; i++) {
+          ctx.fillRect(i*9, 6, 7, o.h-6);
+          ctx.beginPath(); ctx.arc(i*9+3.5, 4, 4, 0, 7); ctx.fill();
+        }
+        break;
+      case "kiosk":
+        ctx.fillStyle = "#b45309"; ctx.fillRect(0, 0, o.w, o.h);
+        ctx.fillStyle = "#fcd34d"; ctx.fillRect(3, 4, o.w-6, 10);
+        break;
+      case "chart": // падающий график
+        ctx.strokeStyle = "#ef4444"; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(o.w*0.4, o.h*0.5); ctx.lineTo(o.w*0.7, o.h*0.3); ctx.lineTo(o.w, o.h); ctx.stroke();
+        ctx.fillStyle = "#ef4444"; ctx.beginPath(); ctx.moveTo(o.w, o.h); ctx.lineTo(o.w-6, o.h-3); ctx.lineTo(o.w-3, o.h-9); ctx.fill();
+        break;
+      case "barrel": // бочка нефти
+        ctx.fillStyle = "#111827"; ctx.fillRect(0, 0, o.w, o.h);
+        ctx.fillStyle = "#f59e0b"; ctx.fillRect(0, o.h*0.4, o.w, 5);
+        break;
+      case "ring": // олимпийское кольцо
+        ctx.strokeStyle = "#0ea5e9"; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.arc(o.w/2, o.h/2, o.w/2-3, 0, 7); ctx.stroke();
+        break;
+      case "wave": // волна (санкции/Крым)
+        ctx.fillStyle = "#0ea5e9";
+        ctx.beginPath(); ctx.moveTo(0, o.h);
+        ctx.quadraticCurveTo(o.w*0.25, -4, o.w*0.5, o.h*0.5);
+        ctx.quadraticCurveTo(o.w*0.75, o.h, o.w, o.h*0.3);
+        ctx.lineTo(o.w, o.h); ctx.closePath(); ctx.fill();
+        break;
+      case "ball": // футбольный мяч
+        ctx.fillStyle = "#f8fafc"; ctx.beginPath(); ctx.arc(o.w/2, o.h/2, o.w/2, 0, 7); ctx.fill();
+        ctx.fillStyle = "#111827"; ctx.beginPath(); ctx.arc(o.w/2, o.h/2, o.w/5, 0, 7); ctx.fill();
+        break;
+      case "drone": // беспилотник
+        ctx.fillStyle = "#1c1917"; ctx.fillRect(o.w*0.3, o.h*0.4, o.w*0.4, o.h*0.3);
+        ctx.strokeStyle = "#52525b"; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(0, o.h*0.3); ctx.lineTo(o.w, o.h*0.3); ctx.stroke();
+        ctx.fillStyle = "#dc2626"; ctx.beginPath(); ctx.arc(o.w/2, o.h*0.7, 3, 0, 7); ctx.fill();
+        break;
+    }
+    ctx.restore();
+  }
+
+  function drawPlayer() {
+    ctx.save();
+    ctx.translate(player.x, player.y - player.h);
+    // тело-бегун (силуэт)
+    ctx.fillStyle = "#f8fafc";
+    ctx.fillRect(player.w*0.3, player.h*0.3, player.w*0.4, player.h*0.55); // туловище
+    ctx.beginPath(); ctx.arc(player.w*0.5, player.h*0.2, player.w*0.28, 0, 7); ctx.fill(); // голова
+    // ноги — анимация бега
+    ctx.strokeStyle = "#f8fafc"; ctx.lineWidth = 5; ctx.lineCap = "round";
+    const swing = player.onGround ? Math.sin(frame * 0.4) * 9 : 4;
+    ctx.beginPath();
+    ctx.moveTo(player.w*0.45, player.h*0.85); ctx.lineTo(player.w*0.45 - swing, player.h);
+    ctx.moveTo(player.w*0.55, player.h*0.85); ctx.lineTo(player.w*0.55 + swing, player.h);
+    ctx.stroke();
+    // руки
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(player.w*0.5, player.h*0.45); ctx.lineTo(player.w*0.5 + swing*0.8, player.h*0.6);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawBackground() {
+    const era = currentEra();
+    // плавное приближение текущих цветов к целевым
+    curSky1 = approachColor(curSky1, era.sky1);
+    curSky2 = approachColor(curSky2, era.sky2);
+    curGround = approachColor(curGround, era.ground);
+
+    const grd = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
+    grd.addColorStop(0, curSky1);
+    grd.addColorStop(1, curSky2);
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, W, GROUND_Y);
+
+    // солнце/луна
+    ctx.fillStyle = "rgba(255,255,255,0.25)";
+    ctx.beginPath(); ctx.arc(W - 90, 80, 34, 0, 7); ctx.fill();
+
+    // земля
+    ctx.fillStyle = curGround;
+    ctx.fillRect(0, GROUND_Y, W, H - GROUND_Y);
+    // линия земли
+    ctx.strokeStyle = "rgba(255,255,255,0.25)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, GROUND_Y); ctx.lineTo(W, GROUND_Y); ctx.stroke();
+  }
+
+  // приближаем rgb-строку к hex-цели
+  function approachColor(cur, targetHex) {
+    let c = cur.startsWith('rgb') ? rgbStr(cur) : hexToRgb(cur);
+    const t = hexToRgb(targetHex);
+    const step = 0.06;
+    const r = Math.round(c.r + (t.r - c.r) * step);
+    const g = Math.round(c.g + (t.g - c.g) * step);
+    const b = Math.round(c.b + (t.b - c.b) * step);
+    return `rgb(${r},${g},${b})`;
+  }
+  function rgbStr(s) {
+    const m = s.match(/\d+/g).map(Number);
+    return { r: m[0], g: m[1], b: m[2] };
+  }
+
+  function jump() {
+    if (!running) return;
+    if (player.onGround) { player.vy = -13.2; player.onGround = false; }
+  }
+
+  function gameOver() {
+    running = false;
+    if (score > best) { best = score; localStorage.setItem('epochs_best', best); hudBest.textContent = best; }
+    ovTitle.textContent = "Игра окончена!";
+    ovText.innerHTML = `Ты добрался до эпохи: <b>${currentEra().name}</b><br>Набрано очков: <b>${score}</b>. Рекорд: <b>${best}</b>.`;
+    startBtn.textContent = "↻ Сыграть ещё раз";
+    overlay.classList.remove('hidden');
+  }
+
+  let lastEraName = "";
+  function loop() {
+    if (!running) return;
+    frame++;
+
+    // физика прыжка
+    player.vy += 0.62;
+    player.y += player.vy;
+    if (player.y >= GROUND_Y) { player.y = GROUND_Y; player.vy = 0; player.onGround = true; }
+
+    // спавн препятствий
+    if (frame % Math.max(55, Math.floor(95 - speed * 3)) === 0) spawnObstacle();
+    if (frame % 120 === 0) spawnProp();
+
+    // движение
+    obstacles.forEach(o => o.x -= speed);
+    props.forEach(p => p.x -= speed * 0.6);
+    obstacles = obstacles.filter(o => o.x + o.w > -10);
+    props = props.filter(p => p.x > -120);
+
+    // очки + столкновения
+    obstacles.forEach(o => {
+      if (!o.hit && o.x + o.w < player.x) { o.hit = true; score++; hudScore.textContent = score; speed += 0.06; }
+      // коллизия (с небольшим запасом)
+      const px = player.x + 4, pw = player.w - 8, py = player.y - player.h, ph = player.h;
+      if (px < o.x + o.w && px + pw > o.x && py + ph > GROUND_Y - o.h) {
+        gameOver();
+      }
+    });
+
+    // смена эпохи
+    const era = currentEra();
+    if (era.name !== lastEraName) {
+      lastEraName = era.name;
+      hudEra.textContent = era.name;
+      if (frame > 5) flashEra(era.name);
+    }
+
+    // рендер
+    ctx.clearRect(0, 0, W, H);
+    drawBackground();
+    props.forEach(drawProp);
+    obstacles.forEach(drawObstacle);
+    drawPlayer();
+
+    requestAnimationFrame(loop);
+  }
+
+  function start() {
+    overlay.classList.add('hidden');
+    initColors();
+    lastEraName = "";
+    reset();
+    hudScore.textContent = '0';
+    requestAnimationFrame(loop);
+  }
+
+  startBtn.addEventListener('click', start);
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' || e.code === 'ArrowUp') {
+      e.preventDefault();
+      if (!running && overlay.classList.contains('hidden') === false) { /* ждём кнопку */ }
+      jump();
+    }
+  });
+  canvas.addEventListener('mousedown', jump);
+  canvas.addEventListener('touchstart', (e) => { e.preventDefault(); jump(); }, { passive: false });
+
+  // первичная отрисовка статичного кадра под оверлеем
+  initColors();
+  player = { x: 90, y: GROUND_Y, w: 26, h: 46, vy: 0, onGround: true };
+  obstacles = []; props = []; score = 0; frame = 0;
+  drawBackground();
+  drawPlayer();
+})();
+</script>
+
+</body>
+</html>

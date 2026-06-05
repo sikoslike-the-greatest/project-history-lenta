@@ -1,0 +1,32 @@
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.cursor/
+
+# Исходные материалы (большие файлы, не нужны в репо)
+*.pdf
+*.xlsx
+*.txt
+siria.txt
+
+# Конспекты и черновики
+Конспект*.md
+Лента времени - контент.md
+Требования и критерии.md
+
+# Фотографии событий (добавляй сам локально)
+assets/img/*.jpg
+assets/img/*.jpeg
+assets/img/*.png
+assets/img/*.webp
+
+# Редакторы и IDE
+.vscode/
+*.suo
+*.user
+
+# Node (если вдруг)
+node_modules/

@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Лента времени · 1991–2022</title>
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+
+<div class="viewer-top">
+  <div class="counter"><span id="cur">1</span> / <span id="total">24</span></div>
+  <div class="top-actions">
+    <button class="icon-btn" id="playBtn" title="Автопрокрутка">▶</button>
+    <a class="icon-btn" href="index.html" title="На главную">✕</a>
+  </div>
+</div>
+
+<div class="viewer">
+  <div class="slides" id="slides"></div>
+</div>
+
+<button class="arrow left" id="prev" title="Предыдущее событие (←)">‹</button>
+<button class="arrow right" id="next" title="Следующее событие (→)">›</button>
+
+<div class="progress-bar" id="dots"></div>
+
+<script src="assets/events.js"></script>
+<script>
+(function () {
+  const slidesEl = document.getElementById('slides');
+  const dotsEl = document.getElementById('dots');
+  const curEl = document.getElementById('cur');
+  const totalEl = document.getElementById('total');
+  const prevBtn = document.getElementById('prev');
+  const nextBtn = document.getElementById('next');
+  const playBtn = document.getElementById('playBtn');
+
+  let index = 0;
+  let autoplay = false;
+  let timer = null;
+
+  totalEl.textContent = EVENTS.length;
+
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+  function detailSection(title, icon, paragraph, list, extraClass) {
+    let inner = '';
+    if (paragraph) inner += `<p>${paragraph}</p>`;
+    if (list && list.length) inner += `<ul>${list.map(i => `<li>${i}</li>`).join('')}</ul>`;
+    return `<div class="detail-section ${extraClass || ''}">
+      <h3>${icon} ${title}</h3>${inner}
+    </div>`;
+  }
+
+  EVENTS.forEach((e) => {
+    const pal = ERA_PALETTES[e.era] || {};
+    const slide = document.createElement('section');
+    slide.className = 'slide';
+    slide.style.setProperty('--slide-accent', pal.accent || 'var(--accent)');
+    slide.style.setProperty('--slide-from', pal.from || '#1f2937');
+    slide.style.setProperty('--slide-to', pal.to || '#111827');
+
+    const figures = e.figures.map(f =>
+      `<div class="figure"><span class="val">${f.value}</span><span class="lab">${f.label}</span></div>`
+    ).join('');
+
+    const d = e.detail || {};
+
+    slide.innerHTML = `
+      <div class="slide-hero">
+        <div class="bg-wrap">
+          <div class="bg-placeholder">
+            <span class="ph-icon">🖼️</span>
+            <div>Сюда подставится фото события</div>
+            <code>${esc(e.image)}</code>
+            <small>положите файл в папку assets/img/ — см. README.txt</small>
+          </div>
+          <img class="bg-img" src="${esc(e.image)}" alt="" onerror="this.style.display='none'">
+          <div class="bg-scrim"></div>
+        </div>
+        <div class="bg-year">${e.year}</div>
+        <div class="slide-inner">
+          <div class="badge-row">
+            <span class="icon-big">${e.icon}</span>
+            <span class="date-pill">${e.date}</span>
+            <span class="era-name">${pal.name || ''}</span>
+          </div>
+          <h2>${e.title}</h2>
+          <p class="lead-short">${e.short}</p>
+          <div class="figures">${figures}</div>
+          <div class="quote hero-quote">« ${e.quote.text} »<span class="author">— ${e.quote.author}</span></div>
+        </div>
+        <div class="scroll-hint" data-scroll-down>
+          <span>Подробнее</span><span class="chev">⌄</span>
+        </div>
+      </div>
+      <div class="slide-detail">
+        <div class="detail-inner">
+          <div class="detail-head">
+            <span class="icon-big">${e.icon}</span>
+            <span class="d-date">${e.date}</span>
+          </div>
+          <div class="detail-title">${e.title}</div>
+          ${detailSection('Предыстория и причины', '📌', d.background, e.causes)}
+          ${detailSection('Как разворачивались события', '🎯', d.course || e.events, null)}
+          ${detailSection('Последствия для России', '⚡', d.russia, e.consequences)}
+          ${detailSection('Последствия для мира', '🌍', d.world, null)}
+          ${detailSection('Историческое значение', '💡', (d.legacy ? d.legacy + ' ' : '') + e.significance, null)}
+          ${detailSection('Источники', '📚', null, e.sources, 'sources-sec')}
+          <div class="detail-nav">
+            <button class="btn small" data-scroll-up>↑ К обложке</button>
+            <button class="btn ghost small" data-next-event>Следующее событие →</button>
+          </div>
+        </div>
+      </div>
+    `;
+    slidesEl.appendChild(slide);
+
+    const dot = document.createElement('div');
+    dot.className = 'dot';
+    dot.title = e.date + ' — ' + e.title;
+    dot.addEventListener('click', () => go(EVENTS.indexOf(e)));
+    dotsEl.appendChild(dot);
+  });
+
+  const slideNodes = Array.from(slidesEl.children);
+  const dotNodes = Array.from(dotsEl.children);
+
+  // IntersectionObserver для появления секций детальной панели
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(en => { if (en.isIntersecting) en.target.classList.add('in'); });
+  }, { threshold: 0.15 });
+  slideNodes.forEach(s => s.querySelectorAll('.detail-section').forEach(sec => io.observe(sec)));
+
+  // Затухание фона при прокрутке вниз к детальной панели
+  slideNodes.forEach(slide => {
+    const bg = slide.querySelector('.bg-wrap');
+    const hint = slide.querySelector('.scroll-hint');
+    slide.addEventListener('scroll', () => {
+      const h = slide.clientHeight || 1;
+      const ratio = Math.min(1, slide.scrollTop / (h * 0.7));
+      bg.style.opacity = String(1 - ratio * 0.92);
+      bg.style.transform = `translateY(${slide.scrollTop * 0.15}px) scale(${1 + ratio * 0.04})`;
+      if (hint) hint.style.opacity = ratio > 0.05 ? '0' : '';
+    }, { passive: true });
+
+    // кнопки внутри слайда
+    const heroH = () => slide.clientHeight;
+    slide.querySelectorAll('[data-scroll-down]').forEach(b =>
+      b.addEventListener('click', () => slide.scrollTo({ top: heroH(), behavior: 'smooth' })));
+    slide.querySelectorAll('[data-scroll-up]').forEach(b =>
+      b.addEventListener('click', () => slide.scrollTo({ top: 0, behavior: 'smooth' })));
+    slide.querySelectorAll('[data-next-event]').forEach(b =>
+      b.addEventListener('click', () => next()));
+  });
+
+  function render() {
+    slidesEl.style.transform = `translateX(-${index * 100}%)`;
+    curEl.textContent = index + 1;
+    slideNodes.forEach((s, i) => {
+      s.classList.toggle('active', i === index);
+      if (i !== index) { s.scrollTop = 0; const bg = s.querySelector('.bg-wrap'); if (bg) { bg.style.opacity = ''; bg.style.transform = ''; } }
+    });
+    dotNodes.forEach((d, i) => {
+      d.classList.toggle('current', i === index);
+      d.classList.toggle('done', i < index);
+    });
+    prevBtn.disabled = index === 0;
+    nextBtn.disabled = index === EVENTS.length - 1;
+    // сбросить прокрутку активного слайда к обложке
+    const act = slideNodes[index];
+    if (act) act.scrollTop = 0;
+  }
+
+  function go(i) {
+    index = Math.max(0, Math.min(EVENTS.length - 1, i));
+    render();
+  }
+  function next() {
+    if (index < EVENTS.length - 1) go(index + 1);
+    else if (autoplay) go(0);
+  }
+  function prev() { go(index - 1); }
+
+  nextBtn.addEventListener('click', next);
+  prevBtn.addEventListener('click', prev);
+
+  document.addEventListener('keydown', (ev) => {
+    const act = slideNodes[index];
+    if (ev.key === 'ArrowRight') { next(); }
+    else if (ev.key === 'ArrowLeft') { prev(); }
+    else if (ev.key === 'ArrowDown') { if (act) { act.scrollBy({ top: act.clientHeight * 0.6, behavior: 'smooth' }); } }
+    else if (ev.key === 'ArrowUp') { if (act) { act.scrollBy({ top: -act.clientHeight * 0.6, behavior: 'smooth' }); } }
+    else if (ev.key === 'Home') { go(0); }
+    else if (ev.key === 'End') { go(EVENTS.length - 1); }
+  });
+
+  // Свайпы: горизонтальные — навигация по событиям, вертикальные — нативный скролл
+  let touchX = null, touchY = null;
+  window.addEventListener('touchstart', (ev) => {
+    touchX = ev.touches[0].clientX; touchY = ev.touches[0].clientY;
+  }, { passive: true });
+  window.addEventListener('touchend', (ev) => {
+    if (touchX === null) return;
+    const dx = ev.changedTouches[0].clientX - touchX;
+    const dy = ev.changedTouches[0].clientY - touchY;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) { dx < 0 ? next() : prev(); }
+    touchX = touchY = null;
+  }, { passive: true });
+
+  function toggleAutoplay() {
+    autoplay = !autoplay;
+    playBtn.textContent = autoplay ? '⏸' : '▶';
+    playBtn.style.background = autoplay ? 'var(--accent)' : '';
+    playBtn.style.color = autoplay ? '#1a1206' : '';
+    if (autoplay) timer = setInterval(next, 11000);
+    else clearInterval(timer);
+  }
+  playBtn.addEventListener('click', toggleAutoplay);
+
+  // открыть нужный слайд, если передан ?slide=N
+  const urlSlide = parseInt(new URLSearchParams(location.search).get('slide'), 10);
+  if (urlSlide >= 1 && urlSlide <= EVENTS.length) go(urlSlide - 1);
+  else render();
+})();
+</script>
+
+</body>
+</html>
